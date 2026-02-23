@@ -1,0 +1,16 @@
+export const metadata = {
+  title: "FindOrigin",
+  description: "Telegram bot for finding information sources",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="ru">
+      <body>{children}</body>
+    </html>
+  );
+}
