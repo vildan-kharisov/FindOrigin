@@ -8,7 +8,7 @@ import {
 } from "@/lib/input-parser";
 import { extractEntities } from "@/lib/extract-entities";
 import { rankSourcesByMeaning } from "@/lib/rank-sources";
-import { SearchResult } from "@/lib/types";
+import { serperSearch } from "@/lib/serper-search";
 
 async function processUpdate(update: TelegramUpdate) {
   const message = update.message;
@@ -58,18 +58,27 @@ async function processUpdate(update: TelegramUpdate) {
     }
 
     const entities = await extractEntities(textToAnalyze);
+    const queries =
+      entities.searchQueries.length > 0
+        ? entities.searchQueries
+        : [textToAnalyze.slice(0, 220)];
 
-    // Google Search API отключен. Используем только ссылки, если они есть во входном тексте.
-    const searchResults: SearchResult[] = entities.links.map((url) => ({
-      url,
-      title: url,
-      snippet: "Ссылка из исходного сообщения",
-    }));
+    let searchResults;
+    try {
+      searchResults = await serperSearch(queries);
+    } catch (searchError) {
+      console.error("Serper search error:", searchError);
+      await sendMessage(
+        chatId,
+        "Не удалось выполнить веб-поиск через Serper API. Проверьте SERPER_API_KEY и лимиты.",
+      );
+      return;
+    }
 
     if (searchResults.length === 0) {
       await sendMessage(
         chatId,
-        "Google Search API отключен. В сообщении не найдено ссылок для проверки. Добавьте ссылку на источник или включите поиск.",
+        "По этому запросу Serper не вернул результаты. Попробуйте уточнить текст.",
       );
       return;
     }
