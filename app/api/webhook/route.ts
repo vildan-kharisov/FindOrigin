@@ -7,8 +7,8 @@ import {
   validateInput,
 } from "@/lib/input-parser";
 import { extractEntities } from "@/lib/extract-entities";
-import { googleSearch } from "@/lib/google-search";
 import { rankSourcesByMeaning } from "@/lib/rank-sources";
+import { SearchResult } from "@/lib/types";
 
 async function processUpdate(update: TelegramUpdate) {
   const message = update.message;
@@ -58,7 +58,22 @@ async function processUpdate(update: TelegramUpdate) {
     }
 
     const entities = await extractEntities(textToAnalyze);
-    const searchResults = await googleSearch(entities.searchQueries);
+
+    // Google Search API отключен. Используем только ссылки, если они есть во входном тексте.
+    const searchResults: SearchResult[] = entities.links.map((url) => ({
+      url,
+      title: url,
+      snippet: "Ссылка из исходного сообщения",
+    }));
+
+    if (searchResults.length === 0) {
+      await sendMessage(
+        chatId,
+        "Google Search API отключен. В сообщении не найдено ссылок для проверки. Добавьте ссылку на источник или включите поиск.",
+      );
+      return;
+    }
+
     const topSources = await rankSourcesByMeaning(textToAnalyze, searchResults);
 
     let response = "Возможные первоисточники:\n\n";
