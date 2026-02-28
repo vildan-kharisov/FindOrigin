@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { TelegramUpdate } from "@/lib/types";
 import { sendMessage } from "@/lib/telegram";
 import {
@@ -90,7 +90,9 @@ async function processUpdate(update: TelegramUpdate) {
 export async function POST(req: Request) {
   try {
     const update: TelegramUpdate = await req.json();
-    processUpdate(update).catch(console.error);
+    after(async () => {
+      await processUpdate(update);
+    });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true });
