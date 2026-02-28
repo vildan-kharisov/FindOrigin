@@ -22,3 +22,17 @@ export interface ParsedInput {
   text: string;
   originalUrl?: string;
 }
+
+export interface SearchResult {
+  url: string;
+  title: string;
+  snippet: string;
+}
+
+export interface RankedSource {
+  url: string;
+  title: string;
+  snippet: string;
+  confidence: number;
+  reason: string;
+}

@@ -1,7 +1,5 @@
-import OpenAI from "openai";
 import { ExtractedEntities } from "./types";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { FALLBACK_MODEL, PRIMARY_MODEL, getAiClient } from "./ai-client";
 
 const SYSTEM_PROMPT = `Ты — аналитик текста. Извлеки из текста структурированные данные и верни JSON:
 {
@@ -26,14 +24,26 @@ const SYSTEM_PROMPT = `Ты — аналитик текста. Извлеки и
 export async function extractEntities(
   text: string,
 ): Promise<ExtractedEntities> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: text },
-    ],
-  });
+  let response;
+  try {
+    response = await getAiClient().chat.completions.create({
+      model: PRIMARY_MODEL,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: text },
+      ],
+    });
+  } catch {
+    response = await getAiClient().chat.completions.create({
+      model: FALLBACK_MODEL,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: text },
+      ],
+    });
+  }
 
   const content = response.choices[0]?.message?.content;
   if (!content) {

@@ -7,6 +7,8 @@ import {
   validateInput,
 } from "@/lib/input-parser";
 import { extractEntities } from "@/lib/extract-entities";
+import { googleSearch } from "@/lib/google-search";
+import { rankSourcesByMeaning } from "@/lib/rank-sources";
 
 async function processUpdate(update: TelegramUpdate) {
   const message = update.message;
@@ -30,8 +32,6 @@ async function processUpdate(update: TelegramUpdate) {
     await sendMessage(chatId, validationError);
     return;
   }
-
-  await sendMessage(chatId, "Анализирую...");
 
   try {
     const parsed = detectInputType(inputText);
@@ -58,39 +58,24 @@ async function processUpdate(update: TelegramUpdate) {
     }
 
     const entities = await extractEntities(textToAnalyze);
+    const searchResults = await googleSearch(entities.searchQueries);
+    const topSources = await rankSourcesByMeaning(textToAnalyze, searchResults);
 
-    let response = "*Результаты анализа:*\n\n";
+    let response = "Возможные первоисточники:\n\n";
 
-    if (entities.claims.length > 0) {
-      response += "*Ключевые утверждения:*\n";
-      entities.claims.forEach((c, i) => (response += `${i + 1}. ${c}\n`));
-      response += "\n";
+    if (topSources.length === 0) {
+      response +=
+        "Не удалось найти достаточно релевантные источники. Попробуйте уточнить текст.";
+      await sendMessage(chatId, response);
+      return;
     }
 
-    if (entities.dates.length > 0) {
-      response += `*Даты:* ${entities.dates.join(", ")}\n\n`;
-    }
-
-    if (entities.numbers.length > 0) {
-      response += `*Числа:* ${entities.numbers.join(", ")}\n\n`;
-    }
-
-    if (entities.names.length > 0) {
-      response += `*Имена/Названия:* ${entities.names.join(", ")}\n\n`;
-    }
-
-    if (entities.links.length > 0) {
-      response += `*Ссылки:* ${entities.links.join(", ")}\n\n`;
-    }
-
-    if (entities.searchQueries.length > 0) {
-      response += "*Поисковые запросы:*\n";
-      entities.searchQueries.forEach(
-        (q, i) => (response += `${i + 1}. ${q}\n`),
-      );
-    }
-
-    response += "\n_Поиск источников будет добавлен в следующем обновлении._";
+    topSources.forEach((source, index) => {
+      response += `${index + 1}) ${source.title}\n`;
+      response += `${source.url}\n`;
+      response += `Уверенность: ${source.confidence}%\n`;
+      response += `Почему: ${source.reason}\n\n`;
+    });
 
     await sendMessage(chatId, response);
   } catch (error) {
