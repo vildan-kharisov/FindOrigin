@@ -1,14 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { TelegramUpdate } from "@/lib/types";
 import { sendMessage } from "@/lib/telegram";
-import {
-  detectInputType,
-  extractTelegramPostText,
-  validateInput,
-} from "@/lib/input-parser";
-import { extractEntities } from "@/lib/extract-entities";
-import { rankSourcesByMeaning } from "@/lib/rank-sources";
-import { serperSearch } from "@/lib/serper-search";
+import { findOriginsByInput } from "@/lib/find-origin";
 
 async function processUpdate(update: TelegramUpdate) {
   const message = update.message;
@@ -27,74 +20,19 @@ async function processUpdate(update: TelegramUpdate) {
     return;
   }
 
-  const validationError = validateInput(inputText);
-  if (validationError) {
-    await sendMessage(chatId, validationError);
-    return;
-  }
-
   try {
-    const parsed = detectInputType(inputText);
-
-    let textToAnalyze: string;
-
-    if (parsed.type === "telegram_link") {
-      try {
-        textToAnalyze = await extractTelegramPostText(parsed.originalUrl!);
-      } catch {
-        await sendMessage(
-          chatId,
-          "Не удалось извлечь текст из поста. Проверьте ссылку.",
-        );
-        return;
-      }
-    } else {
-      textToAnalyze = parsed.text;
-    }
-
-    if (!textToAnalyze) {
-      await sendMessage(chatId, "Не удалось получить текст для анализа.");
-      return;
-    }
-
-    const entities = await extractEntities(textToAnalyze);
-    const queries =
-      entities.searchQueries.length > 0
-        ? entities.searchQueries
-        : [textToAnalyze.slice(0, 220)];
-
-    let searchResults;
-    try {
-      searchResults = await serperSearch(queries);
-    } catch (searchError) {
-      console.error("Serper search error:", searchError);
-      await sendMessage(
-        chatId,
-        "Не удалось выполнить веб-поиск через Serper API. Проверьте SERPER_API_KEY и лимиты.",
-      );
-      return;
-    }
-
-    if (searchResults.length === 0) {
-      await sendMessage(
-        chatId,
-        "По этому запросу Serper не вернул результаты. Попробуйте уточнить текст.",
-      );
-      return;
-    }
-
-    const topSources = await rankSourcesByMeaning(textToAnalyze, searchResults);
+    const { sources } = await findOriginsByInput(inputText);
 
     let response = "Возможные первоисточники:\n\n";
 
-    if (topSources.length === 0) {
+    if (sources.length === 0) {
       response +=
         "Не удалось найти достаточно релевантные источники. Попробуйте уточнить текст.";
       await sendMessage(chatId, response);
       return;
     }
 
-    topSources.forEach((source, index) => {
+    sources.forEach((source, index) => {
       response += `${index + 1}) ${source.title}\n`;
       response += `${source.url}\n`;
       response += `Уверенность: ${source.confidence}%\n`;
@@ -104,9 +42,17 @@ async function processUpdate(update: TelegramUpdate) {
     await sendMessage(chatId, response);
   } catch (error) {
     console.error("Processing error:", error);
+    const message =
+      error instanceof Error &&
+      (error.message.includes("SERPER_API_KEY") ||
+        error.message.includes("Serper API error"))
+        ? "Не удалось выполнить веб-поиск через Serper API. Проверьте SERPER_API_KEY и лимиты."
+        : error instanceof Error
+          ? error.message
+          : "Произошла ошибка при обработке. Попробуйте позже.";
     await sendMessage(
       chatId,
-      "Произошла ошибка при обработке. Попробуйте позже.",
+      message,
     );
   }
 }

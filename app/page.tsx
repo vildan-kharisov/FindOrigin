@@ -6,6 +6,9 @@ export default function Home() {
       <p>
         Webhook endpoint: <code>/api/webhook</code>
       </p>
+      <p>
+        Mini App UI: <code>/miniapp</code>
+      </p>
     </main>
   );
 }
